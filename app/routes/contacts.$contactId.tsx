@@ -11,7 +11,7 @@ import avatarUrl from '~/images/avatar.jpg';
 export const loader = async ({ params } : LoaderFunctionArgs) => {
   invariant(params.contactId, 'Missiing contactId param');
   const contact = await getContact(params.contactId);
-  if (!contact) {
+  if (!contact) { 
     throw new Response("No Found", {status: 404});
   }
   return json({contact});
