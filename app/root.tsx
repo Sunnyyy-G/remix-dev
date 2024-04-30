@@ -1,22 +1,27 @@
 import { json } from "@remix-run/node";
 import {
   Form,
-  Link,
+  NavLink,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLoaderData
+  useLoaderData,
+  useNavigation,
+  useSubmit
 } from "@remix-run/react";
-import type { LinksFunction } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { useEffect, useState } from 'react';
 import appStylesHref from './app.css?url';
 
 import { createEmptyContact, getContacts } from "./data";
 
-export const loader = async () => {
-  const contacts = await getContacts();
-  return json({contacts});
+export const loader = async ({ request } : LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const q = url.searchParams.get('q');
+  const contacts = await getContacts(q);
+  return json({contacts, q});
 }
 
 export const action = async () => {
@@ -29,7 +34,15 @@ export const links: LinksFunction = () => [
 ]
 
 export default function App() {
-  const { contacts } = useLoaderData<typeof loader>();
+  const { contacts, q } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const [query, setQuery] = useState(q || '');
+  const submit = useSubmit();
+  const searching = navigation.location && new URLSearchParams(navigation.location.search).has('q');
+
+  useEffect(() => {
+    setQuery(q || '');
+  },[q]);
 
   return (
     <html lang="en">
@@ -43,15 +56,30 @@ export default function App() {
         <div id="sidebar">
           <h1>Remix Contacts</h1>
           <div>
-            <Form id="search-form" role="search">
+            <Form
+              id="search-form"
+              onChange={(e) => {
+                const isFirstSearch = q === null;
+                submit(e.currentTarget, {
+                  replace: !isFirstSearch,
+                });
+              }}
+              role="search"
+            >
               <input
                 id="q"
                 aria-label="Search contacts"
+                defaultValue={q || ''}
                 placeholder="Search"
                 type="search"
                 name="q"
+                onChange={(e) => {
+                  setQuery(e.currentTarget.value);
+                }}
+                value={query}
+                className={searching ? 'loading' : ''}
               />
-              <div id="search-spinner" aria-hidden hidden={true} />
+              <div id="search-spinner" aria-hidden hidden={!searching} />
             </Form>
             <Form method="post">
               <button type="submit">New</button>
@@ -64,7 +92,16 @@ export default function App() {
                   {
                     contacts.map((contact) => (
                       <li key={contact.id}>
-                        <Link to={`contacts/${contact.id}`}>
+                        <NavLink
+                          className={({ isActive, isPending}) =>
+                            isActive
+                            ? 'active'
+                            : isPending
+                            ? 'pending'
+                            : ''
+                          }
+                          to={`contacts/${contact.id}`}
+                        >
                           {
                             contact.first || contact.last ? `${contact.first} ${contact.last}` : (<i>No Name</i>)
                           }
@@ -72,7 +109,7 @@ export default function App() {
                           {
                             contact.favorite ? <span>★</span> : null
                           }
-                        </Link>
+                        </NavLink>
                       </li>
                     ))
                   }
@@ -85,7 +122,14 @@ export default function App() {
             }
           </nav>
         </div>
-        <div id="detail">
+        <div
+          className={
+            navigation.state === 'loading' && !searching
+            ? 'loading'
+            : ''
+          }
+          id="detail"
+        >
           <Outlet />
         </div>
 
